@@ -1,0 +1,7 @@
+channels:
+- defaults
+- bioconda
+- conda-forge
+dependencies:
+- bioconda::star=2.7.11b
+- conda-forge::libgcc=14.2.0

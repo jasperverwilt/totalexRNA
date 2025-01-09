@@ -1,0 +1,5 @@
+channels:
+- defaults
+- bioconda
+dependencies:
+- bioconda::samtools=1.21
