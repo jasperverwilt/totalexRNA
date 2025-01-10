@@ -1,0 +1,142 @@
+---
+title: "Random title"
+author: "Jasper Verwilt"
+date: "2025-01-09"
+output:
+  html_document:
+    theme: yeti # A clean and modern theme from Bootswatch
+    highlight: tango  # Syntax highlighting style
+    code_folding: hide  # Collapsible code blocks
+    toc: true  # Include a table of contents
+    toc_depth: 3  # Show TOC up to level 3 headings
+    toc_float: true  # Make the TOC float while scrolling
+    css: custom.css  # Link to your custom CSS file
+params:
+  dark_mode: true  # Add parameter for enabling dark mode
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(plotly)
+color_palette <- c(
+  "#E69F00", # Orange
+  "#56B4E9", # Sky Blue
+  "#009E73", # Green
+  "#F0E442", # Yellow
+  "#0072B2", # Blue
+  "#D55E00", # Vermilion
+  "#CC79A7", # Reddish Purple
+  "#999999", # Gray
+  "#000000", # Black
+  "#A6761D", # Brown
+  "#1B9E77", # Dark Green
+  "#D95F02", # Dark Orange
+  "#7570B3", # Violet
+  "#E7298A", # Magenta
+  "#66A61E"  # Lime Green
+)
+output_dir <- "/Users/jasperverwilt/Downloads/totalexRNA/output/"
+samples <- list.files(output_dir)
+```
+
+# Quality control
+## DNA contamination
+On of the largest caveats in RNA sequencing, and extracellular RNA sequencing especially, is DNA contamination. Luckily, we can determine the extent of this problem by investigation the metrics of our output. None of these metrics on their own can determine DNA contamination but, together, they can indicate an issue.
+
+### Strandedness
+Many RNA sequencing library preparation protocols use a stranded approach. This means that the reads generated from a transcript map specifically to either the coding or template strand. The SMARTer® Stranded Total RNA-Seq Kit - Pico Input Mammalian, for example, is a stranded protocol. More specifically, it is a reverse stranded protocol, meaning that the reads map to the template strand. When sequencing DNA, both strands will be sequenced and your stranded library preparation becomes unstranded. Ideally, the fraction of "reads mapped to template strand" is close to 1. The closer this value gets to 0.5, the more likely your data contains some DNA data.
+
+```{r count_distribution, echo = FALSE}
+strandedness <- tibble()
+
+for (sample in samples) {
+  x <- read_table(paste0(output_dir, "/", sample, "/08_rseqc/", sample, "_strandedness.txt"), skip = 3, col_names = FALSE)$X7
+  strandedness <- rbind(strandedness, 
+                        tibble(sample = sample, 
+                               type = factor(c("unsure", "mapped to coding strand", "mapped to template strand"), levels = c("unsure", "mapped to template strand", "mapped to coding strand")), 
+                               fraction = x)
+  )
+}
+
+ggplotly(strandedness %>%
+  ggplot(aes(sample, fraction, fill = type)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  theme(axis.title = element_text(face = "bold"), 
+        legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45)) +
+  xlab("") + 
+  ylab("fraction of\ndeduplicated reads\n") +
+  scale_fill_manual(values = color_palette))
+```
+
+### Splice reads
+Since the kits used here are total RNA sequencing kits, we at least expect some of the reads to map to splice junctions. In case of DNA, there should be little to no reads mapping to splice junctions. 
+
+```{r spliced_reads, echo = FALSE}
+spliced_reads <- tibble()
+
+for (sample in samples) {
+  x <- read_table(paste0(output_dir, "/", sample, "/08_rseqc/", sample, "_raw_bam_stat.txt"), col_names = paste0("X", 1:5))
+  spliced_reads <- rbind(spliced_reads,
+                         tibble(type = c("non-splice", "splice"), 
+                                reads = as.double(x$X3[15:16]), 
+                                sample = sample)
+                         )
+}
+
+ggplotly(spliced_reads %>%
+  group_by(sample) %>%
+  mutate(fraction = reads / sum(reads)) %>%
+  ungroup() %>%
+  ggplot(aes(sample, fraction, fill = type)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() + 
+  theme(axis.title = element_text(face = "bold"), 
+        legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab("") + 
+  ylab("fraction of raw reads\n") +
+  scale_fill_manual(values = color_palette))
+```
+
+```{r deconvolution, echo = FALSE}
+deconvolution <- tibble()
+
+for (sample in samples) {
+  deconvolution <- rbind(deconvolution,
+                         read_csv(paste0(output_dir, "/", sample, "/07_deconv/", sample, "_deconvolutionCoefs.csv")) %>%
+                           mutate(sample = sample)
+  )
+}
+  
+ggplotly(deconvolution %>%
+  group_by(sample) %>%
+  filter(rmse == min(rmse)) %>% 
+  ungroup() %>%
+  gather(key = celltype, value = est_fraction, -...1, -rmse, -r, -sample) %>%
+  filter(est_fraction > 0) %>%
+  group_by(sample) %>%
+  mutate(fraction = est_fraction / sum(est_fraction)) %>%
+  ungroup() %>%
+  dplyr::select(sample, celltype, fraction) %>%
+  mutate(celltype = ifelse(fraction < 0.01, "other cell types", str_replace_all(str_replace_all(celltype, "/", "\n"), "_", " "))) %>%
+  group_by(sample, celltype) %>%
+  summarise(fraction = sum(fraction)) %>%
+  ungroup() %>%
+  group_by(celltype) %>%
+  mutate(avg_fraction = median(fraction)) %>%
+  ungroup() %>%
+  arrange(avg_fraction) %>%
+  mutate(celltype = factor(celltype, levels = unique(celltype))) %>%
+  ggplot(aes(sample, fraction, fill = celltype)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45),
+        axis.title.y = element_text(face = "bold")) +
+  xlab("") + 
+  ylab("estimated relative cell fraction\n") +
+  scale_fill_manual(values = c(color_palette, color_palette, color_palette, color_palette)))
+```
