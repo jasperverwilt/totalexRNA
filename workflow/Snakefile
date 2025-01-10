@@ -51,7 +51,7 @@ if config['arguments']['version'] in ["v3"]:
         shell:
             'umi_tools extract --extract-method=string -I {input.R2} -L {output.umilog} --bc-pattern=NNNNNNNN --read2-in={input.R1} -S {output.R2} --read2-out={output.R1}'
 
-if config['arguments']['sequencing'] in ["pe"]:
+if config['arguments']['sequencing'] in ["pe"] and config['arguments']['version'] in ["v3"]:
     rule map_pe:
         input:
             R1=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R1.fastq.gz"),
@@ -65,6 +65,20 @@ if config['arguments']['sequencing'] in ["pe"]:
         shell:
             'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {config[index][star]} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} {input.R2} --outTmpDir /tmp/temp_star'
 
+if config['arguments']['sequencing'] in ["pe"] and config['arguments']['version'] in ["v2"]:
+    rule map_pe:
+        input:
+            R1=os.path.join(path, "{sample}/01_combine/{sample}_R1.fastq.gz"),
+            R2=os.path.join(path, "{sample}/01_combine/{sample}_R2.fastq.gz")
+        output:
+            os.path.join(path, "{sample}/03_map/{sample}.Aligned.sortedByCoord.out.bam")
+        conda:
+            "envs/star.yaml"
+        params:
+            path = path
+        shell:
+            'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {config[index][star]} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} {input.R2} --outTmpDir /tmp/temp_star_{wildcards.sample}'
+
 elif config['arguments']['sequencing'] in ["se"]:
     rule map_se:
         input:
@@ -76,7 +90,7 @@ elif config['arguments']['sequencing'] in ["se"]:
         params:
             path = path
         shell:
-            'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {config[index][star]} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} --outTmpDir /tmp/temp_star'
+            'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {config[index][star]} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} --outTmpDir /tmp/temp_star_{wildcards.sample}'
 
 rule index:
     input:
@@ -116,9 +130,9 @@ elif config['arguments']['version'] in ["v2"] or config['arguments']['sequencing
             "envs/picard.yaml"
         shell:
             """
-            picard AddOrReplaceReadGroups I={input.bam} O=temp.bam RGID=4 RGLB=lib1 RGPL=ILLUMINA RGPU=unit1 RGSM=20
-            picard MarkDuplicates I=temp.bam O={output.bam} ASSUME_SORT_ORDER=coordinate VALIDATION_STRINGENCY=SILENT REMOVE_DUPLICATES=true M={output.log}
-            rm temp.bam
+            picard AddOrReplaceReadGroups I={input.bam} O={wildcards.sample}_temp.bam RGID=4 RGLB=lib1 RGPL=ILLUMINA RGPU=unit1 RGSM=20
+            picard MarkDuplicates I={wildcards.sample}_temp.bam O={output.bam} ASSUME_SORT_ORDER=coordinate VALIDATION_STRINGENCY=SILENT REMOVE_DUPLICATES=true M={output.log}
+            rm {wildcards.sample}_temp.bam
             """
 
 
