@@ -14,7 +14,6 @@ rule all:
         expand(os.path.join(path, "{sample}/08_rseqc/{sample}_dedup_bam_stat.txt"), sample = samples),
         expand(os.path.join(path, "{sample}/08_rseqc/{sample}_raw_bam_stat.txt"), sample = samples),
         expand(os.path.join(path, "{sample}/08_rseqc/{sample}_strandedness.txt"), sample = samples),
-        expand(os.path.join(path, "{sample}/07_deconv/{sample}_deconvolutionCoefs.csv"), sample = samples),
         expand(os.path.join(path, "{sample}/09_fastqc/{sample}.Aligned.sortedByCoord.out.dedup_fastqc.html"), sample = samples)
 
 if config['arguments']['sequencing'] in ["se"]:
@@ -174,31 +173,32 @@ if config['arguments']['sequencing'] in ["pe"]:
         shell:
             "CIRIquant --config config -l 2 -t 2 -1 {input.R1} -2 {input.R2} -o {params.path}/{wildcards.sample}/06_circRNA/ -p {wildcards.sample}_circRNA"
 
-rule prepare_deconvolution:
-    input:
-        os.path.join(path, "{sample}/05_count/{sample}_htseq_dedup_counts.txt")
-    output:
-        os.path.join(path, "{sample}/07_deconv/{sample}_todeconvolve.csv")
-    conda:
-        "envs/R.yaml"
-    shell:
-        "Rscript workflow/scripts/prepare_deconvolution.R {input} {config[other][prepare_deconv]} {wildcards.sample} {output}"
+if config['arguments']['deconvolution'] in ["yes"]:
+    rule prepare_deconvolution:
+        input:
+            os.path.join(path, "{sample}/05_count/{sample}_htseq_dedup_counts.txt")
+        output:
+            os.path.join(path, "{sample}/07_deconv/{sample}_todeconvolve.csv")
+        conda:
+            "envs/R.yaml"
+        shell:
+            "Rscript workflow/scripts/prepare_deconvolution.R {input} {config[other][prepare_deconv]} {wildcards.sample} {output}"
 
 
-rule deconvolution:
-    input:
-        os.path.join(path, "{sample}/07_deconv/{sample}_todeconvolve.csv")
-    output:
-        os.path.join(path, "{sample}/07_deconv/{sample}_deconvolutionCoefs.csv")
-    params:
-        path = path
-    conda: 
-        "envs/deconvolution.yaml"
-    shell:
-        """
-        cd /home/jverwilt/resources/tools/deconvolution/deconvolve_cfrna_tutorial
-        python3 -c 'import deconvolve as deconv; deconv.main(1, "{input}", ["{wildcards.sample}"] , "nuSVR", "{wildcards.sample}", "{params.path}/{wildcards.sample}/07_deconv/", jackknife = False)'
-        """
+    rule deconvolution:
+        input:
+            os.path.join(path, "{sample}/07_deconv/{sample}_todeconvolve.csv")
+        output:
+            os.path.join(path, "{sample}/07_deconv/{sample}_deconvolutionCoefs.csv")
+        params:
+            path = path
+        conda: 
+            "envs/deconvolution.yaml"
+        shell:
+            """
+            cd /home/jverwilt/resources/tools/deconvolution/deconvolve_cfrna_tutorial
+            python3 -c 'import deconvolve as deconv; deconv.main(1, "{input}", ["{wildcards.sample}"] , "nuSVR", "{wildcards.sample}", "{params.path}/{wildcards.sample}/07_deconv/", jackknife = False)'
+            """
 
 rule rseqc:
     input:
