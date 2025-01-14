@@ -1,8 +1,8 @@
-input_dir: "/home/jverwilt/totalRNApipeline/test_case_v2"
-output_dir: "/home/jverwilt/totalRNApipeline/output/test_v2"
+input_dir: "/home/jverwilt/totalRNApipeline/tests/input/v3_pe"
+output_dir: "/home/jverwilt/totalRNApipeline/tests/output/v3_pe"
 
 arguments:
-  version: "v2"
+  version: "v3"
   sequencing: "pe"
   deconvolution: "no"
 

@@ -62,7 +62,7 @@ if config['arguments']['sequencing'] in ["pe"] and config['arguments']['version'
         params:
             path = path
         shell:
-            'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {config[index][star]} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} {input.R2} --outTmpDir /tmp/temp_star'
+            'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {config[index][star]} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} {input.R2} --outTmpDir /tmp/temp_star_{wildcards.sample}'
 
 if config['arguments']['sequencing'] in ["pe"] and config['arguments']['version'] in ["v2"]:
     rule map_pe:
