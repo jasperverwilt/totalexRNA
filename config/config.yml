@@ -1,22 +1,18 @@
-input_dir: "/home/jverwilt/totalRNApipeline/tests/input/v3_se"
-output_dir: "/home/jverwilt/totalRNApipeline/tests/output/v3_se"
+input_dir: "/home/jverwilt/totalRNApipeline/tests/input/v3_pe"
+output_dir: "/home/jverwilt/totalRNApipeline/tests/output/v3_pe"
 
 arguments:
   version: "v3"
-  sequencing: "se"
+  sequencing: "pe"
   deconvolution: "no"
 
 reference:
   fasta: /home/jverwilt/resources/genome/chm13/chm13_MT_spikes.fa
   gtf: /home/jverwilt/resources/gtf/chm13/chm13_MT_spikes.gtf
   bed: /home/jverwilt/resources/gtf/chm13/chm13_MT_spikes.bed
-  bwa_index: /home/jverwilt/resources/indexes/chm13/bwa_index/chm13_MT_spikes.fa
-  hisat_index: /home/jverwilt/resources/indexes/chm13/HISAT_index/genome
 
 index:
   star: /home/jverwilt/resources/indexes/chm13/STAR_index
-  hisat: /home/jverwilt/resources/indexes/chm13/HISAT_index/genome
-  bwa: /home/jverwilt/resources/indexes/chm13/bwa_index/
 
 other:
-  prepare_deconv: /home/jverwilt/JV2408_tear_RNA/code/chm13_MT_prepare_deconv.tsv
+  prepare_deconv: /home/jverwilt/totalRNApipeline/resources/chm13_MT_prepare_deconv.tsv
