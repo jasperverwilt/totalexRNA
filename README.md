@@ -21,18 +21,11 @@ In addition, you should change the input and output folders in the config file u
 
 
 ## Run the pipeline
-You can run the pipeline by running the following command in your terminal.
+You can run the pipeline by running the following command in your terminal. The first line makes sure that, when environments are created, your local python packages are disregarded so that they are properly and newly installed in the environments.
 
 ```ruby
+export PYTHONNOUSERSITE=1
 snakemake --cores 4 --software-deployment-method conda --conda-frontend conda
-```
-
-## Issues
-You should be able to run the pipeline right out the box, but some small adjustments might have to be made: 
-- If used python packages (such as Numpy) are also installed locally, the pipeline will automatically use these. This might result in issues with compatibility, so this feature should be turned off, forcing the pipeline to only use packages in the environment. To do this, run the following line before running the pipeline. 
-
-```ruby 
-export PYTHONUSERBASE=intentionally-disabled
 ```
 
 In theory, you could run the pipeline locally, but since it relies on STAR for read mapping, the complete index is loaded in memory. This is usually the drop in the emmer who is already full for you computer. 
