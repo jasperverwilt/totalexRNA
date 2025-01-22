@@ -2,7 +2,12 @@
 This pipeline accompanies our lab protocol for total extracellular RNA sequencing of human blood plasma. 
 
 ## Preparations
-
+### Get the code
+You can download the code and necessary files by cloning the GitHub repository: 
+```ruby 
+git clone https://github.com/jasperverwilt/totalexRNA.git
+cd totalexRNA
+```
 ### Snakemake
 The pipeline relies on the proper installation of [snakemake](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html), so make sure to install and activate snakemake before use:
 ```ruby
