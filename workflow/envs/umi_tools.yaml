@@ -1,7 +1,7 @@
 channels:
-- defaults
 - bioconda
-- conda-forge
 dependencies:
-- bioconda::umi_tools=1.1.6
-- conda-forge::numpy=1.24.0
+- bioconda::numpy==1.26.4
+- bioconda::umi_tools
+variables:
+- PYTHONNOUSERSITE: 1

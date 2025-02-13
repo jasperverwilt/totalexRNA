@@ -1,3 +1,4 @@
+container: "docker://jverwilt/totalrna:v0.3"
 
 import os
 import pandas as pd
@@ -45,20 +46,35 @@ if config['version'] in ["v3"]:
             R1=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R1.fastq.gz"),
             R2=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R2.fastq.gz"),
             umilog=os.path.join(path, "{sample}/02_extract_umi/UMIextract.log")
-        conda:
-            "envs/umi_tools.yaml"
         shell:
             'umi_tools extract --extract-method=string -I {input.R2} -L {output.umilog} --bc-pattern=NNNNNNNN --read2-in={input.R1} -S {output.R2} --read2-out={output.R1}'
+
+if config['sequencing'] in ["pe"] and config['version'] in ["v3"]:
+    rule cut_v3:
+        input:
+            R2=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R2.fastq.gz")
+        output:
+            R2=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_trimmed_R2.fastq.gz")
+        shell:
+            'cutadapt -u 6 -o {output.R2} {input.R2}'
+
+if config['sequencing'] in ["pe"] and config['version'] in ["v2"]:
+    rule cut_v2:
+        input:
+            R2=os.path.join(path, "{sample}/01_combine/{sample}_R2.fastq.gz")
+        output:
+            R2=os.path.join(path, "{sample}/01_combine/{sample}_trimmed_R2.fastq.gz")
+        shell:
+            'cutadapt -u 3 -o {output.R2} {input.R2}'
+
 
 if config['sequencing'] in ["pe"] and config['version'] in ["v3"]:
     rule map_pe:
         input:
             R1=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R1.fastq.gz"),
-            R2=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R2.fastq.gz")
+            R2=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_trimmed_R2.fastq.gz")
         output:
             os.path.join(path, "{sample}/03_map/{sample}.Aligned.sortedByCoord.out.bam")
-        conda:
-            "envs/star.yaml"
         params:
             path = path
         shell:
@@ -68,15 +84,14 @@ if config['sequencing'] in ["pe"] and config['version'] in ["v2"]:
     rule map_pe:
         input:
             R1=os.path.join(path, "{sample}/01_combine/{sample}_R1.fastq.gz"),
-            R2=os.path.join(path, "{sample}/01_combine/{sample}_R2.fastq.gz")
+            R2=os.path.join(path, "{sample}/01_combine/{sample}_trimmed_R2.fastq.gz"),
+            index=config['index']['star']
         output:
             os.path.join(path, "{sample}/03_map/{sample}.Aligned.sortedByCoord.out.bam")
-        conda:
-            "envs/star.yaml"
         params:
             path = path
         shell:
-            'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {config[index][star]} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} {input.R2} --outTmpDir /tmp/temp_star_{wildcards.sample}'
+            'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {input.index} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} {input.R2} --outTmpDir /tmp/temp_star_{wildcards.sample}'
 
 elif config['sequencing'] in ["se"]:
     rule map_se:
@@ -96,8 +111,6 @@ rule index:
         os.path.join(path, "{sample}/03_map/{sample}.Aligned.sortedByCoord.out.bam")
     output:
         os.path.join(path, "{sample}/03_map/{sample}.Aligned.sortedByCoord.out.bam.bai")
-    conda:
-        "envs/samtools.yaml"
     shell:
         "samtools index {input}"
 
@@ -111,8 +124,6 @@ if config['version'] in ["v3"] and config['sequencing'] in ["pe"]:
             log=os.path.join(path, "{sample}/04_dedup/umidedup.txt")
         params: 
             path = path
-        conda:
-            "envs/umi_tools.yaml"
         shell:
             "umi_tools dedup -I {input.bam} --output-stats={params.path}/{wildcards.sample}/04_dedup/deduplicated --paired -S {output.bam} -L {output.log}"
 
@@ -125,8 +136,6 @@ elif config['version'] in ["v2"] or config['sequencing'] in ["se"]:
             log=os.path.join(path, "{sample}/04_dedup/picarddedup.txt")
         params: 
             path = path
-        conda:
-            "envs/picard.yaml"
         shell:
             """
             picard AddOrReplaceReadGroups I={input.bam} O={wildcards.sample}_temp.bam RGID=4 RGLB=lib1 RGPL=ILLUMINA RGPU=unit1 RGSM=20
@@ -140,8 +149,6 @@ rule count:
         os.path.join(path, "{sample}/04_dedup/{sample}.Aligned.sortedByCoord.out.dedup.bam")
     output:
         os.path.join(path, "{sample}/05_count/{sample}_htseq_dedup_counts.txt")
-    conda:
-        "envs/htseq.yaml"
     shell:
         "htseq-count --format bam --order pos --nonunique none --stranded reverse {input} {config[reference][gtf]} > {output}"
 
@@ -154,8 +161,6 @@ if config['sequencing'] in ["pe"]:
         output:
             R1=os.path.join(path, "{sample}/04_dedup/{sample}.Aligned.sortedByCoord.out.dedup_R1.fastq"),
             R2=os.path.join(path, "{sample}/04_dedup/{sample}.Aligned.sortedByCoord.out.dedup_R2.fastq")
-        conda:
-            "envs/samtools.yaml"
         shell:
             "samtools sort -n {input} | bedtools bamtofastq -i stdin -fq {output.R1} -fq2 {output.R2}"
 
@@ -168,8 +173,6 @@ if config['sequencing'] in ["pe"]:
             os.path.join(path, "{sample}/06_circRNA/{sample}_circRNA.gtf")
         params:
             path = path
-        conda:
-            "envs/ciriquant.yaml"
         shell:
             "CIRIquant --config config -l 2 -t 2 -1 {input.R1} -2 {input.R2} -o {params.path}/{wildcards.sample}/06_circRNA/ -p {wildcards.sample}_circRNA"
 
@@ -179,8 +182,6 @@ if config['deconvolution'] in ["yes"]:
             os.path.join(path, "{sample}/05_count/{sample}_htseq_dedup_counts.txt")
         output:
             os.path.join(path, "{sample}/07_deconv/{sample}_todeconvolve.csv")
-        conda:
-            "envs/R.yaml"
         shell:
             "Rscript workflow/scripts/prepare_deconvolution.R {input} {config[other][prepare_deconv]} {wildcards.sample} {output}"
 
@@ -192,8 +193,6 @@ if config['deconvolution'] in ["yes"]:
             os.path.join(path, "{sample}/07_deconv/{sample}_deconvolutionCoefs.csv")
         params:
             path = path
-        conda: 
-            "envs/deconvolution.yaml"
         shell:
             """
             cd /home/jverwilt/resources/tools/deconvolution/deconvolve_cfrna_tutorial
@@ -208,8 +207,6 @@ rule rseqc:
         bam_stat_dedup=os.path.join(path, "{sample}/08_rseqc/{sample}_dedup_bam_stat.txt"),
         bam_stat_raw=os.path.join(path, "{sample}/08_rseqc/{sample}_raw_bam_stat.txt"),
         strandedness=os.path.join(path, "{sample}/08_rseqc/{sample}_strandedness.txt")
-    conda:
-        "envs/rseqc.yaml"
     shell:
         """
         bam_stat.py -i {input.dedup} > {output.bam_stat_dedup}
@@ -224,8 +221,6 @@ rule fastqc:
         os.path.join(path, "{sample}/09_fastqc/{sample}.Aligned.sortedByCoord.out.dedup_fastqc.html")
     params:
         path = path
-    conda:
-        "envs/fastqc.yaml"
     shell:
         "fastqc -o {params.path}/{wildcards.sample}/09_fastqc/ {params.path}/{wildcards.sample}/01_combine/* {params.path}/{wildcards.sample}/04_dedup/*.bam"
 
