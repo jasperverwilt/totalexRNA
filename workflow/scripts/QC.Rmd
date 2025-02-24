@@ -1,7 +1,5 @@
 ---
-title: "Random title"
-author: "Jasper Verwilt"
-date: "2025-01-09"
+title: "DNA contamination QC"
 output:
   html_document:
     theme: yeti # A clean and modern theme from Bootswatch
@@ -12,6 +10,7 @@ output:
     toc_float: true  # Make the TOC float while scrolling
     css: custom.css  # Link to your custom CSS file
 params:
+  args: ''
   dark_mode: true  # Add parameter for enabling dark mode
 ---
 
@@ -19,6 +18,7 @@ params:
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 library(tidyverse)
 library(plotly)
+
 color_palette <- c(
   "#E69F00", # Orange
   "#56B4E9", # Sky Blue
@@ -36,7 +36,9 @@ color_palette <- c(
   "#E7298A", # Magenta
   "#66A61E"  # Lime Green
 )
-output_dir <- "/Users/jasperverwilt/Downloads/totalexRNA/output/"
+args <-  params$args
+output_dir <- args[1]
+
 samples <- list.files(output_dir)
 ```
 
@@ -47,7 +49,7 @@ On of the largest caveats in RNA sequencing, and extracellular RNA sequencing es
 ### Strandedness
 Many RNA sequencing library preparation protocols use a stranded approach. This means that the reads generated from a transcript map specifically to either the coding or template strand. The SMARTer® Stranded Total RNA-Seq Kit - Pico Input Mammalian, for example, is a stranded protocol. More specifically, it is a reverse stranded protocol, meaning that the reads map to the template strand. When sequencing DNA, both strands will be sequenced and your stranded library preparation becomes unstranded. Ideally, the fraction of "reads mapped to template strand" is close to 1. The closer this value gets to 0.5, the more likely your data contains some DNA data.
 
-```{r count_distribution, echo = FALSE}
+```{r strandedness, echo = FALSE}
 strandedness <- tibble()
 
 for (sample in samples) {
@@ -99,44 +101,4 @@ ggplotly(spliced_reads %>%
   xlab("") + 
   ylab("fraction of raw reads\n") +
   scale_fill_manual(values = color_palette))
-```
-
-```{r deconvolution, echo = FALSE}
-deconvolution <- tibble()
-
-for (sample in samples) {
-  deconvolution <- rbind(deconvolution,
-                         read_csv(paste0(output_dir, "/", sample, "/07_deconv/", sample, "_deconvolutionCoefs.csv")) %>%
-                           mutate(sample = sample)
-  )
-}
-  
-ggplotly(deconvolution %>%
-  group_by(sample) %>%
-  filter(rmse == min(rmse)) %>% 
-  ungroup() %>%
-  gather(key = celltype, value = est_fraction, -...1, -rmse, -r, -sample) %>%
-  filter(est_fraction > 0) %>%
-  group_by(sample) %>%
-  mutate(fraction = est_fraction / sum(est_fraction)) %>%
-  ungroup() %>%
-  dplyr::select(sample, celltype, fraction) %>%
-  mutate(celltype = ifelse(fraction < 0.01, "other cell types", str_replace_all(str_replace_all(celltype, "/", "\n"), "_", " "))) %>%
-  group_by(sample, celltype) %>%
-  summarise(fraction = sum(fraction)) %>%
-  ungroup() %>%
-  group_by(celltype) %>%
-  mutate(avg_fraction = median(fraction)) %>%
-  ungroup() %>%
-  arrange(avg_fraction) %>%
-  mutate(celltype = factor(celltype, levels = unique(celltype))) %>%
-  ggplot(aes(sample, fraction, fill = celltype)) +
-  geom_bar(stat = "identity") +
-  theme_minimal() +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 45),
-        axis.title.y = element_text(face = "bold")) +
-  xlab("") + 
-  ylab("estimated relative cell fraction\n") +
-  scale_fill_manual(values = c(color_palette, color_palette, color_palette, color_palette)))
 ```

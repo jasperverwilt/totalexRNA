@@ -1,4 +1,4 @@
-container: "docker://jverwilt/totalrna:v0.3"
+container: "docker://jverwilt/totalrna:v0.5"
 
 import os
 import pandas as pd
@@ -15,7 +15,8 @@ rule all:
         expand(os.path.join(path, "{sample}/08_rseqc/{sample}_dedup_bam_stat.txt"), sample = samples),
         expand(os.path.join(path, "{sample}/08_rseqc/{sample}_raw_bam_stat.txt"), sample = samples),
         expand(os.path.join(path, "{sample}/08_rseqc/{sample}_strandedness.txt"), sample = samples),
-        expand(os.path.join(path, "{sample}/09_fastqc/{sample}.Aligned.sortedByCoord.out.dedup_fastqc.html"), sample = samples)
+        expand(os.path.join(path, "{sample}/09_fastqc/{sample}.Aligned.sortedByCoord.out.dedup_fastqc.html"), sample = samples),
+        os.path.join(path, "QC.html")
 
 if config['sequencing'] in ["se"]:
     rule combine_se:
@@ -37,20 +38,19 @@ if config['sequencing'] in ["pe"]:
             shell("cat {params.inputpath}/{wildcards.sample}/*R1*.fastq.gz > {output.R1}")
             shell("cat {params.inputpath}/{wildcards.sample}/*R2*.fastq.gz > {output.R2}")
 
-if config['version'] in ["v3"]:
-    rule extract_umi:
-        input:
-            R1=os.path.join(path, "{sample}/01_combine/{sample}_R1.fastq.gz"),
-            R2=os.path.join(path, "{sample}/01_combine/{sample}_R2.fastq.gz")
-        output:
-            R1=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R1.fastq.gz"),
-            R2=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R2.fastq.gz"),
-            umilog=os.path.join(path, "{sample}/02_extract_umi/UMIextract.log")
-        shell:
-            'umi_tools extract --extract-method=string -I {input.R2} -L {output.umilog} --bc-pattern=NNNNNNNN --read2-in={input.R1} -S {output.R2} --read2-out={output.R1}'
+rule extract_umi:
+    input:
+        R1=os.path.join(path, "{sample}/01_combine/{sample}_R1.fastq.gz"),
+        R2=os.path.join(path, "{sample}/01_combine/{sample}_R2.fastq.gz")
+    output:
+        R1=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R1.fastq.gz"),
+        R2=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R2.fastq.gz"),
+        umilog=os.path.join(path, "{sample}/02_extract_umi/UMIextract.log")
+    shell:
+        'umi_tools extract --extract-method=string -I {input.R2} -L {output.umilog} --bc-pattern=NNNNNNNN --read2-in={input.R1} -S {output.R2} --read2-out={output.R1}'
 
-if config['sequencing'] in ["pe"] and config['version'] in ["v3"]:
-    rule cut_v3:
+if config['sequencing'] in ["pe"]:
+    rule cut:
         input:
             R2=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R2.fastq.gz")
         output:
@@ -58,17 +58,7 @@ if config['sequencing'] in ["pe"] and config['version'] in ["v3"]:
         shell:
             'cutadapt -u 6 -o {output.R2} {input.R2}'
 
-if config['sequencing'] in ["pe"] and config['version'] in ["v2"]:
-    rule cut_v2:
-        input:
-            R2=os.path.join(path, "{sample}/01_combine/{sample}_R2.fastq.gz")
-        output:
-            R2=os.path.join(path, "{sample}/01_combine/{sample}_trimmed_R2.fastq.gz")
-        shell:
-            'cutadapt -u 3 -o {output.R2} {input.R2}'
-
-
-if config['sequencing'] in ["pe"] and config['version'] in ["v3"]:
+if config['sequencing'] in ["pe"]:
     rule map_pe:
         input:
             R1=os.path.join(path, "{sample}/02_extract_umi/{sample}_umi_R1.fastq.gz"),
@@ -79,19 +69,6 @@ if config['sequencing'] in ["pe"] and config['version'] in ["v3"]:
             path = path
         shell:
             'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {config[index][star]} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} {input.R2} --outTmpDir /tmp/temp_star_{wildcards.sample}'
-
-if config['sequencing'] in ["pe"] and config['version'] in ["v2"]:
-    rule map_pe:
-        input:
-            R1=os.path.join(path, "{sample}/01_combine/{sample}_R1.fastq.gz"),
-            R2=os.path.join(path, "{sample}/01_combine/{sample}_trimmed_R2.fastq.gz"),
-            index=config['index']['star']
-        output:
-            os.path.join(path, "{sample}/03_map/{sample}.Aligned.sortedByCoord.out.bam")
-        params:
-            path = path
-        shell:
-            'STAR --chimSegmentMin 10 --runThreadN 2 --genomeDir {input.index} --readFilesCommand gunzip -c --outSAMtype BAM SortedByCoordinate --outFileNamePrefix {params.path}/{wildcards.sample}/03_map/{wildcards.sample}. --readFilesIn {input.R1} {input.R2} --outTmpDir /tmp/temp_star_{wildcards.sample}'
 
 elif config['sequencing'] in ["se"]:
     rule map_se:
@@ -114,7 +91,7 @@ rule index:
     shell:
         "samtools index {input}"
 
-if config['version'] in ["v3"] and config['sequencing'] in ["pe"]:
+if config['sequencing'] in ["pe"]:
     rule dedup_umi:
         input:
             bam=os.path.join(path, "{sample}/03_map/{sample}.Aligned.sortedByCoord.out.bam"),
@@ -127,7 +104,7 @@ if config['version'] in ["v3"] and config['sequencing'] in ["pe"]:
         shell:
             "umi_tools dedup -I {input.bam} --output-stats={params.path}/{wildcards.sample}/04_dedup/deduplicated --paired -S {output.bam} -L {output.log}"
 
-elif config['version'] in ["v2"] or config['sequencing'] in ["se"]:
+elif config['sequencing'] in ["se"]:
     rule dedup_picard:
         input:
             bam=os.path.join(path, "{sample}/03_map/{sample}.Aligned.sortedByCoord.out.bam")
@@ -143,7 +120,6 @@ elif config['version'] in ["v2"] or config['sequencing'] in ["se"]:
             rm {wildcards.sample}_temp.bam
             """
 
-
 rule count:
     input:
         os.path.join(path, "{sample}/04_dedup/{sample}.Aligned.sortedByCoord.out.dedup.bam")
@@ -152,52 +128,6 @@ rule count:
     shell:
         "htseq-count --format bam --order pos --nonunique none --stranded reverse {input} {config[reference][gtf]} > {output}"
 
-    #split bam file into multiple smaller files and then process, change CPU number
-
-if config['sequencing'] in ["pe"]:
-    rule bamtofastq:
-        input:
-            os.path.join(path, "{sample}/04_dedup_umi/{sample}.Aligned.sortedByCoord.out.dedup.bam")
-        output:
-            R1=os.path.join(path, "{sample}/04_dedup/{sample}.Aligned.sortedByCoord.out.dedup_R1.fastq"),
-            R2=os.path.join(path, "{sample}/04_dedup/{sample}.Aligned.sortedByCoord.out.dedup_R2.fastq")
-        shell:
-            "samtools sort -n {input} | bedtools bamtofastq -i stdin -fq {output.R1} -fq2 {output.R2}"
-
-if config['sequencing'] in ["pe"]:
-    rule ciriquant:
-        input:
-            R1=os.path.join(path, "{sample}/04_dedup/{sample}.Aligned.sortedByCoord.out.dedup_R1.fastq"),
-            R2=os.path.join(path, "{sample}/04_dedup/{sample}.Aligned.sortedByCoord.out.dedup_R2.fastq")
-        output:
-            os.path.join(path, "{sample}/06_circRNA/{sample}_circRNA.gtf")
-        params:
-            path = path
-        shell:
-            "CIRIquant --config config -l 2 -t 2 -1 {input.R1} -2 {input.R2} -o {params.path}/{wildcards.sample}/06_circRNA/ -p {wildcards.sample}_circRNA"
-
-if config['deconvolution'] in ["yes"]:
-    rule prepare_deconvolution:
-        input:
-            os.path.join(path, "{sample}/05_count/{sample}_htseq_dedup_counts.txt")
-        output:
-            os.path.join(path, "{sample}/07_deconv/{sample}_todeconvolve.csv")
-        shell:
-            "Rscript workflow/scripts/prepare_deconvolution.R {input} {config[other][prepare_deconv]} {wildcards.sample} {output}"
-
-
-    rule deconvolution:
-        input:
-            os.path.join(path, "{sample}/07_deconv/{sample}_todeconvolve.csv")
-        output:
-            os.path.join(path, "{sample}/07_deconv/{sample}_deconvolutionCoefs.csv")
-        params:
-            path = path
-        shell:
-            """
-            cd /home/jverwilt/resources/tools/deconvolution/deconvolve_cfrna_tutorial
-            python3 -c 'import deconvolve as deconv; deconv.main(1, "{input}", ["{wildcards.sample}"] , "nuSVR", "{wildcards.sample}", "{params.path}/{wildcards.sample}/07_deconv/", jackknife = False)'
-            """
 
 rule rseqc:
     input:
@@ -224,3 +154,14 @@ rule fastqc:
     shell:
         "fastqc -o {params.path}/{wildcards.sample}/09_fastqc/ {params.path}/{wildcards.sample}/01_combine/* {params.path}/{wildcards.sample}/04_dedup/*.bam"
 
+rule DNA_contamination:
+    input: 
+        fastqc=expand(os.path.join(path, "{sample}/09_fastqc/{sample}.Aligned.sortedByCoord.out.dedup_fastqc.html"), sample = samples)
+    output:
+        os.path.join(path, "QC.html")
+    params:
+        path = path
+    shell:
+        "Rscript --vanilla workflow/scripts/write_rmarkdown.R {params.path} {output}"
+
+    
