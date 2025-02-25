@@ -16,6 +16,7 @@ rule all:
         expand(os.path.join(path, "{sample}/08_rseqc/{sample}_raw_bam_stat.txt"), sample = samples),
         expand(os.path.join(path, "{sample}/08_rseqc/{sample}_strandedness.txt"), sample = samples),
         expand(os.path.join(path, "{sample}/09_fastqc/{sample}.Aligned.sortedByCoord.out.dedup_fastqc.html"), sample = samples),
+        expand(os.path.join(path, "{sample}/05_count/{sample}_htseq_dedup_counts.txt"), sample = samples),
         os.path.join(path, "QC.html")
 
 if config['sequencing'] in ["se"]:
@@ -164,4 +165,4 @@ rule DNA_contamination:
     shell:
         "Rscript --vanilla workflow/scripts/write_rmarkdown.R {params.path} {output}"
 
-    
+
