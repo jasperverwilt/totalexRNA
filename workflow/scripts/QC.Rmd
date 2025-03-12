@@ -40,6 +40,8 @@ args <-  params$args
 output_dir <- args[1]
 
 samples <- list.files(output_dir)
+annotation <- read_table("../../resources/annotation.tsv")
+
 ```
 
 # Quality control
@@ -102,3 +104,81 @@ ggplotly(spliced_reads %>%
   ylab("fraction of raw reads\n") +
   scale_fill_manual(values = color_palette))
 ```
+
+## Biotype distribution
+```{r biotype_distribution, echo = FALSE}
+counts <- tibble()
+for (sample in samples) {
+  x <- read_table(paste0(output_dir, "/", sample, "/05_count/", sample, "_htseq_dedup_counts.txt"), col_names = FALSE)
+  counts <- rbind(counts,
+  x %>% mutate(sample = sample))
+}
+
+ggplotly(counts %>%
+  filter(grepl("ENSG", X1)) %>%
+  left_join(annotation, by = c("X1" = "gene_id")) %>%
+  group_by(sample, biotype) %>%
+  summarise(count = sum(X2)) %>%
+  ungroup() %>%
+  group_by(sample) %>%
+  mutate(fr = count / sum(count)) %>%
+  ungroup() %>%
+  mutate(new_biotype = ifelse(fr < 0.005, "less than 1%", biotype)) %>%
+  group_by(new_biotype) %>%
+  mutate(avg_over_biotype = mean(fr)) %>%
+  ungroup() %>%
+  arrange(desc(avg_over_biotype)) %>%
+  mutate(new_biotype = factor(new_biotype, levels = unique(new_biotype))) %>% 
+  group_by(sample, new_biotype) %>%
+  summarise(fr = sum(fr)) %>%
+  ungroup() %>%
+  ggplot(aes(sample, fr, fill = new_biotype)) +
+  geom_histogram(stat = "identity") +
+  theme_minimal() + 
+  theme(axis.title = element_text(face = "bold"), 
+        legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab("") + 
+  ylab("fraction of counts\n") +
+  scale_fill_manual(values = color_palette))
+```
+
+## Count distribution
+```{r counts_distribution, echo = FALSE}
+ggplotly(counts %>%
+  mutate(type = ifelse(grepl("__", X1), X1, 
+                  ifelse(grepl("^R", X1), "sequin",
+                    ifelse(grepl("^ERCC", X1), "ERCC", "genetic")))) %>%
+  mutate(type = factor(type, levels = c("__no_feature", "__ambiguous", "__too_low_aQual", "__not_aligned", "__alignment_not_unique", "sequin", "ERCC", "genetic"))) %>%
+  group_by(sample, type) %>%
+  summarise(count = sum(X2)) %>%
+  ungroup() %>%
+  group_by(sample) %>%
+  mutate(fr = count / sum(count)) %>%
+  ungroup() %>%
+  ggplot(aes(sample, fr, fill = type)) + 
+  geom_histogram(stat = "identity") +
+  theme_minimal() + 
+  theme(axis.title = element_text(face = "bold"), 
+        legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab("") + 
+  ylab("fraction of counts\n") +
+  scale_fill_manual(values = color_palette))
+
+ggplotly(counts %>%
+  filter(!grepl("__|^R|ERCC", X1)) %>%
+  dplyr::rename(`log10(counts)` = X2) %>%
+  mutate(counts = 10^`log10(counts)`) %>%
+  ggplot(aes(`log10(counts)`, col = sample)) +
+  stat_ecdf(aes(`log10(counts)`, col = sample)) +
+  theme_minimal() +
+  theme(axis.title = element_text(face = "bold"),
+        legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab("\ncounts") +
+  ylab("fraction of genes\n") +
+  scale_color_manual(values = rep(color_palette, 50)) +
+  scale_x_log10())
+```
+
